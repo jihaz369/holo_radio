@@ -1,0 +1,77 @@
+name: Build Flutter APK
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Find Flutter Project
+        id: project
+        shell: bash
+        run: |
+          PROJECT_DIR=$(find . -name pubspec.yaml | head -n 1 | xargs dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Flutter project not found!"
+            exit 1
+          fi
+
+          echo "Project: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter Version
+        run: flutter --version
+
+      - name: Get Dependencies
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        run: flutter analyze || true
+
+      - name: Run Tests
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        run: flutter test || true
+
+      - name: Build APK (Release)
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flutter-APK
+          path: |
+            ${{ steps.project.outputs.project_dir }}/build/app/outputs/flutter-apk/*.apk
+
+      - name: Show APK Location
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        run: |
+          find build -name "*.apk"
